@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,4 +28,72 @@ jobs:
 
       - name: Lint SAM and CloudFormation template
         run: cfn-lint template.yaml
+
+  deploy:
+    name: Deploy CloudFormation
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != '')
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_STACK_NAME: ${{ vars.AWS_STACK_NAME }}
+      SAM_ARTIFACT_BUCKET: ${{ vars.SAM_ARTIFACT_BUCKET }}
+      CFN_EXECUTION_ROLE_ARN: ${{ vars.CFN_EXECUTION_ROLE_ARN }}
+      GITHUB_APP_SECRET_ARN: ${{ vars.GITHUB_APP_SECRET_ARN }}
+      WEBHOOK_SECRET_ARN: ${{ vars.WEBHOOK_SECRET_ARN }}
+      ALLOWED_REPOSITORIES: ${{ vars.ALLOWED_REPOSITORIES }}
+      OPT_IN_LABEL: ${{ vars.OPT_IN_LABEL || 'ai-ready' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check deployment configuration
+        shell: bash
+        run: |
+          for name in AWS_DEPLOY_ROLE_ARN AWS_REGION AWS_STACK_NAME SAM_ARTIFACT_BUCKET CFN_EXECUTION_ROLE_ARN GITHUB_APP_SECRET_ARN WEBHOOK_SECRET_ARN ALLOWED_REPOSITORIES; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing GitHub environment variable: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ github.token }}
+
+      - name: Build SAM application
+        run: sam build --template-file template.yaml
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        shell: bash
+        run: |
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name "$AWS_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --s3-bucket "$SAM_ARTIFACT_BUCKET" \
+            --role-arn "$CFN_EXECUTION_ROLE_ARN" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              "ParameterKey=GitHubAppSecretArn,ParameterValue=$GITHUB_APP_SECRET_ARN" \
+              "ParameterKey=WebhookSecretArn,ParameterValue=$WEBHOOK_SECRET_ARN" \
+              "ParameterKey=AllowedRepositories,ParameterValue=$ALLOWED_REPOSITORIES" \
+              "ParameterKey=OptInLabel,ParameterValue=$OPT_IN_LABEL"
 
