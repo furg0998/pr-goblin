@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: GitHub App issue-to-draft-PR automation starter
+
+Parameters:
+  GitHubAppSecretArn:
+    Type: String
+    Description: Secrets Manager ARN containing app_id, installation_id, and private_key_pem.
+  WebhookSecretArn:
+    Type: String
+    Description: Secrets Manager ARN containing the GitHub webhook HMAC secret.
+  OptInLabel:
+    Type: String
+    Default: ai-ready
+    Description: Issue label required before the automation queues work.
+  AllowedRepositories:
+    Type: CommaDelimitedList
+    Default: example-owner/example-repo
+    Description: Exact owner/repository names permitted for processing; replace before deployment.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 10
+    Tracing: Active
+
+Resources:
+  WorkQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-work.fifo'
+      FifoQueue: true
+      VisibilityTimeout: 5400
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt WorkDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  WorkDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-dead-letter.fifo'
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
+
+  WebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/webhook/
+      Handler: app.handler
+      Timeout: 10
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref WorkQueue
+          WEBHOOK_SECRET_ARN: !Ref WebhookSecretArn
+          OPT_IN_LABEL: !Ref OptInLabel
+          ALLOWED_REPOSITORIES: !Join [',', !Ref AllowedRepositories]
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt WorkQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref WebhookSecretArn
+      Events:
+        GitHubWebhook:
+          Type: HttpApi
+          Properties:
+            Path: /webhook
+            Method: POST
+
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/worker/
+      Handler: app.handler
+      Timeout: 900
+      MemorySize: 1024
+      Environment:
+        Variables:
+          GITHUB_APP_SECRET_ARN: !Ref GitHubAppSecretArn
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt WorkQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref GitHubAppSecretArn
+      Events:
+        QueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt WorkQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes: [ReportBatchItemFailures]
+
+Outputs:
+  WebhookUrl:
+    Description: Configure this URL as the GitHub App webhook URL.
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/webhook'
+  QueueArn:
+    Value: !GetAtt WorkQueue.Arn
+
