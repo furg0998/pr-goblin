@@ -130,7 +130,7 @@ try {
 
     Write-Host ""
     Write-Host "Created Secrets Manager secrets:"
-    Write-Host "GITHUB_APP_SECRET_ARN=$($appSecret.ARN)"
+    Write-Host "APP_CREDENTIALS_SECRET_ARN=$($appSecret.ARN)"
     Write-Host "WEBHOOK_SECRET_ARN=$($webhookSecretResult.ARN)"
     Write-Host ""
     Write-Host "Set this webhook secret on your GitHub App now (shown once):"
