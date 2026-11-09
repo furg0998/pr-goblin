@@ -45,7 +45,7 @@ jobs:
       AWS_STACK_NAME: ${{ vars.AWS_STACK_NAME }}
       SAM_ARTIFACT_BUCKET: ${{ vars.SAM_ARTIFACT_BUCKET }}
       CFN_EXECUTION_ROLE_ARN: ${{ vars.CFN_EXECUTION_ROLE_ARN }}
-      GITHUB_APP_SECRET_ARN: ${{ vars.GITHUB_APP_SECRET_ARN }}
+      APP_CREDENTIALS_SECRET_ARN: ${{ vars.APP_CREDENTIALS_SECRET_ARN }}
       WEBHOOK_SECRET_ARN: ${{ vars.WEBHOOK_SECRET_ARN }}
       ALLOWED_REPOSITORIES: ${{ vars.ALLOWED_REPOSITORIES }}
       OPT_IN_LABEL: ${{ vars.OPT_IN_LABEL || 'ai-ready' }}
@@ -56,7 +56,7 @@ jobs:
       - name: Check deployment configuration
         shell: bash
         run: |
-          for name in AWS_DEPLOY_ROLE_ARN AWS_REGION AWS_STACK_NAME SAM_ARTIFACT_BUCKET CFN_EXECUTION_ROLE_ARN GITHUB_APP_SECRET_ARN WEBHOOK_SECRET_ARN ALLOWED_REPOSITORIES; do
+          for name in AWS_DEPLOY_ROLE_ARN AWS_REGION AWS_STACK_NAME SAM_ARTIFACT_BUCKET CFN_EXECUTION_ROLE_ARN APP_CREDENTIALS_SECRET_ARN WEBHOOK_SECRET_ARN ALLOWED_REPOSITORIES; do
             if [[ -z "${!name}" ]]; then
               echo "Missing GitHub environment variable: $name" >&2
               exit 1
@@ -91,7 +91,7 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-              "ParameterKey=GitHubAppSecretArn,ParameterValue=$GITHUB_APP_SECRET_ARN" \
+              "ParameterKey=GitHubAppSecretArn,ParameterValue=$APP_CREDENTIALS_SECRET_ARN" \
               "ParameterKey=WebhookSecretArn,ParameterValue=$WEBHOOK_SECRET_ARN" \
               "ParameterKey=AllowedRepositories,ParameterValue=$ALLOWED_REPOSITORIES" \
               "ParameterKey=OptInLabel,ParameterValue=$OPT_IN_LABEL"
