@@ -28,7 +28,13 @@ In the same AWS account and region, create these Secrets Manager secrets before 
 - **GitHub App secret:** JSON with `app_id`, `installation_id`, and `private_key_pem`.
 - **Webhook secret:** the raw webhook secret configured on the GitHub App.
 
-Record each secret's ARN. The secret values stay in Secrets Manager; only the ARNs go into GitHub Actions variables.
+From the repository root, you can create both with the helper script:
+
+```powershell
+.\scripts\create-github-secrets.ps1 -Profile default -Region ap-southeast-2
+```
+
+It checks the AWS account, refuses to overwrite existing secrets, stores the downloaded PEM key without printing it, and generates the webhook secret for you to copy into the GitHub App settings. The profile needs `sts:GetCallerIdentity`, `secretsmanager:DescribeSecret`, and `secretsmanager:CreateSecret` permissions. Record the returned ARNs. The secret values stay in Secrets Manager and GitHub App settings; only the ARNs go into GitHub Actions variables.
 
 ## 3. Add repository Actions variables
 
