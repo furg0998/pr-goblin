@@ -47,7 +47,7 @@ In the GitHub repository, open **Settings → Secrets and variables → Actions 
 | `AWS_STACK_NAME` | `pr-goblin` |
 | `SAM_ARTIFACT_BUCKET` | S3 artifact bucket **name** from SAM bootstrap |
 | `CFN_EXECUTION_ROLE_ARN` | CloudFormation execution role ARN from SAM bootstrap |
-| `GITHUB_APP_SECRET_ARN` | ARN of the GitHub App secret in Secrets Manager |
+| `APP_CREDENTIALS_SECRET_ARN` | ARN of the GitHub App secret in Secrets Manager |
 | `WEBHOOK_SECRET_ARN` | ARN of the webhook secret in Secrets Manager |
 | `ALLOWED_REPOSITORIES` | Comma-separated `owner/repo` allowlist |
 | `OPT_IN_LABEL` | Optional; defaults to `ai-ready` |
