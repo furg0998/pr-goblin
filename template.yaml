@@ -80,7 +80,7 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          GITHUB_APP_SECRET_ARN: !Ref GitHubAppSecretArn
+          APP_CREDENTIALS_SECRET_ARN: !Ref GitHubAppSecretArn
       Policies:
         - SQSPollerPolicy:
             QueueName: !GetAtt WorkQueue.QueueName
