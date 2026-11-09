@@ -10,25 +10,43 @@ Set-StrictMode -Version Latest
 function Invoke-AwsJson {
     param([string[]]$Arguments)
 
-    $output = & aws @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "AWS CLI command failed (exit code $LASTEXITCODE). Check the selected profile and permissions."
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & aws @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
     }
-    return (($output -join [Environment]::NewLine) | ConvertFrom-Json)
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -ne 0) {
+        $details = ($output -join [Environment]::NewLine).Trim()
+        throw "AWS CLI command failed (exit code $exitCode): $details"
+    }
+    $jsonOutput = ($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) -join [Environment]::NewLine
+    return ($jsonOutput | ConvertFrom-Json)
 }
 
 function Assert-SecretDoesNotExist {
     param([string]$SecretName, [string[]]$AwsOptions)
 
-    $probe = & aws secretsmanager describe-secret --secret-id $SecretName @AwsOptions 2>&1
-    $exitCode = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $probe = & aws secretsmanager describe-secret --secret-id $SecretName @AwsOptions 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
     if ($exitCode -eq 0) {
         throw "Secret '$SecretName' already exists. This script will not overwrite it."
     }
 
     $probeText = $probe -join [Environment]::NewLine
     if ($probeText -notmatch "ResourceNotFoundException") {
-        throw "Could not safely check whether '$SecretName' exists. Check Secrets Manager access and retry."
+        throw "Could not safely check whether '$SecretName' exists. AWS CLI said: $probeText"
     }
 }
 
